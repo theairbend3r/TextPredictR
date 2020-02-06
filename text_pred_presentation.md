@@ -1,0 +1,35 @@
+Text Predictor
+========================================================
+author: Akshaj Verma 
+date: 
+autosize: true
+
+Algorithm
+========================================================
+
+N-gram markov chains is used to build the text predictor. I've used bigrams and trigrams to
+train the model.
+
+N-gram markov chains takes into account the previous n-words in order to generate a prediction.
+
+
+How the app works
+========================================================
+
+The app dynamically switches between making bigram and trigram predictions.
+
+If there is only one word as an input, then bigram predictions are generated.
+Else, the algorithm compares the best bigram and trigram predictions and selects word with a higher probability.
+
+
+App Experience
+========================================================
+
+Wait for a few seconds for the app to load. Then enter your text. Make sure to not have a trailing white space at the end. Since, the app
+was trained only on 0.1% of data due to hardware limitations, the predictions might not be very good.
+
+
+Thank You
+========================================================
+
+I would love your feedback for this app.

@@ -1,0 +1,322 @@
+---
+title: "Predictive Text App"
+author: "Akshaj Verma"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+library(tm)
+library(SnowballC)
+library(gridExtra)
+library(wordcloud)
+library(tidyr)
+library(stringr)
+library(RColorBrewer)
+```
+
+
+```{r}
+us_blog <- readLines(con = "../data/final/en_US/en_US.blogs.txt", encoding='UTF-8')
+us_twitter <- readLines(con = "../data/final/en_US/en_US.twitter.txt", encoding='UTF-8')
+us_news <- readLines(con = "../data/final/en_US/en_US.news.txt", encoding='UTF-8')
+```
+
+```{r}
+sample_us_blog <- sample(us_blog, length(us_blog) * 0.001)
+sample_us_twitter <- sample(us_blog, length(us_twitter) * 0.001)
+sample_us_news <- sample(us_blog, length(us_news) * 0.001)
+```
+
+```{r}
+corpus_us_blog <- Corpus(VectorSource(sample_us_blog))
+corpus_us_twitter <- Corpus(VectorSource(sample_us_twitter))
+corpus_us_news <- Corpus(VectorSource(sample_us_news))
+```
+
+Inspect US Blogs.
+```{r}
+inspect(corpus_us_blog[1:4])
+```
+
+Inspect US Twitter.
+```{r}
+inspect(corpus_us_twitter[1:4])
+```
+
+Inspect US News.
+```{r}
+inspect(corpus_us_news[1:4])
+```
+
+
+## Data Cleaning
+
+
+
+## Exploratory Analysis 
+
+Convert to Dataframe for tidytext
+```{r}
+df_us_blog <- data.frame(text = sapply(corpus_us_blog, as.character), stringsAsFactors = FALSE)
+df_us_twitter <- data.frame(text = sapply(corpus_us_twitter, as.character), stringsAsFactors = FALSE)
+df_us_news <- data.frame(text = sapply(corpus_us_news, as.character), stringsAsFactors = FALSE)
+```
+
+
+
+Combine all three dataframes - US News, Blogs, and Twitter into a single dataframe. 
+```{r}
+df_us <- rbind(mutate(df_us_blog, source = "blog"),
+               mutate(df_us_twitter, source = "twitter"),
+               mutate(df_us_news, source = "news"))
+```
+
+
+
+### Wordcloud US Blogs.
+```{r}
+pal <- brewer.pal(8,"Dark2")
+
+
+df_us_blog %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by="word") %>%
+  filter(
+    !str_detect(word, pattern = "[[:digit:]]"), # removes any words with numeric digits
+    !str_detect(word, pattern = "[[:punct:]]"), # removes any remaining punctuations
+    !str_detect(word, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+    !str_detect(word, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+  ) %>%
+  count(word, sort = TRUE) %>%
+  with(wordcloud(word, n, random.order = FALSE, max.words = 100, colors=pal))
+```
+
+### Wordcloud US Twitter.
+```{r}
+df_us_twitter %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by="word") %>%
+  filter(
+    !str_detect(word, pattern = "[[:digit:]]"), # removes any words with numeric digits
+    !str_detect(word, pattern = "[[:punct:]]"), # removes any remaining punctuations
+    !str_detect(word, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+    !str_detect(word, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+  ) %>%
+  count(word, sort = TRUE) %>%
+  with(wordcloud(word, n, random.order = FALSE, max.words = 100, colors=pal))
+```
+
+
+### Wordcloud US News.
+```{r}
+df_us_news %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by="word") %>%
+  filter(
+    !str_detect(word, pattern = "[[:digit:]]"), # removes any words with numeric digits
+    !str_detect(word, pattern = "[[:punct:]]"), # removes any remaining punctuations
+    !str_detect(word, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+    !str_detect(word, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+  ) %>%
+  count(word, sort = TRUE) %>%
+  with(wordcloud(word, n, random.order = FALSE, max.words = 100, colors=pal))
+```
+
+
+### Analyzing Unigrams
+```{r fig.height=7, fig.width=14}
+unigrams_us_blog <- df_us_blog %>%
+                      unnest_tokens(word, text) %>%
+                      anti_join(stop_words, by="word") %>%
+                      count(word, sort=TRUE) %>%
+                      head(15) %>%
+                      ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Unigrams US Blogs")
+
+unigrams_us_twitter <- df_us_twitter %>%
+                        unnest_tokens(word, text) %>%
+                        anti_join(stop_words, by="word") %>%
+                        count(word, sort=TRUE) %>%
+                        head(15) %>%
+                        ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Unigrams US Twitter")
+
+unigrams_us_news <- df_us_news %>%
+                      unnest_tokens(word, text) %>%
+                      anti_join(stop_words, by="word") %>%
+                      count(word, sort=TRUE) %>%
+                      head(15) %>%
+                      ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Unigrams US News")
+
+
+grid.arrange(unigrams_us_blog, unigrams_us_twitter, unigrams_us_news, nrow=1)
+```
+
+
+
+
+"Time" and "Love" seems to be a common word that appears in all three mediums - blogs, news, and twitter in the US.
+
+### Analyzing Bigrams
+```{r fig.height=7, fig.width=14}
+bigrams_us_blog <- df_us_blog %>%
+                      unnest_tokens(word, text, token="ngrams", n=2) %>%
+                      count(word, sort=TRUE) %>%
+                      head(15) %>%
+                      ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Bigrams US Blogs")
+
+bigrams_us_twitter <- df_us_twitter %>%
+                        unnest_tokens(word, text, token="ngrams", n=2) %>%
+                        count(word, sort=TRUE) %>%
+                        head(15) %>%
+                        ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Bigrams US Twitter")
+
+bigrams_us_news <- df_us_news %>%
+                      unnest_tokens(word, text, token="ngrams", n=2) %>%
+                      count(word, sort=TRUE) %>%
+                      head(15) %>%
+                      ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Bigrams US News")
+
+
+grid.arrange(bigrams_us_blog, bigrams_us_twitter, bigrams_us_news, nrow=1)
+```
+
+
+
+### Analyzing Trigrams
+```{r fig.height=7, fig.width=14}
+trigrams_us_blog <- df_us_blog %>%
+                      unnest_tokens(word, text, token="ngrams", n=3) %>%
+                      count(word, sort=TRUE) %>%
+                      head(15) %>%
+                      ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Bigrams US Blogs")
+
+trigrams_us_twitter <- df_us_twitter %>%
+                        unnest_tokens(word, text, token="ngrams", n=3) %>%
+                        count(word, sort=TRUE) %>%
+                        head(15) %>%
+                        ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Bigrams US Twitter")
+
+trigrams_us_news <- df_us_news %>%
+                      unnest_tokens(word, text, token="ngrams", n=3) %>%
+                      count(word, sort=TRUE) %>%
+                      head(15) %>%
+                      ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Bigrams US News")
+
+
+grid.arrange(trigrams_us_blog, trigrams_us_twitter, trigrams_us_news, nrow=1)
+```
+
+
+### Analysing unigrams, bigrams, and trigrams for the combined US dataset
+
+```{r fig.height=7, fig.width=14}
+df_us_unigrams <- df_us %>%
+                    unnest_tokens(word, text, token="ngrams", n=1) %>%
+                    anti_join(stop_words, by = "word") %>%
+                    filter(
+                        !str_detect(word, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    count(word, sort=TRUE) %>%
+                    head(15) %>%
+                    ggplot(mapping = aes(x = word, y = n)) + geom_bar(stat = "identity", aes(fill = n)) + coord_flip() + ggtitle("Unigrams US Data")
+
+
+df_us_bigrams <- df_us %>%
+                    unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+                    separate(bigram, c("word1", "word2"), sep = " ") %>%
+                    filter(!word1 %in% stop_words$word) %>%
+                    filter(!word2 %in% stop_words$word) %>%
+                    filter(
+                        !str_detect(word1, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word1, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word1, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word1, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    filter(
+                        !str_detect(word2, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word2, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word2, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word2, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    count(word1, word2, sort = TRUE) %>%
+                    unite(bigram, word1, word2, sep = " ") %>%
+                    head(15) %>%
+                    ggplot(mapping = aes(bigram, n, fill = n)) + geom_col() + coord_flip() + ggtitle("Bigrams US Data")
+
+
+df_us_trigrams <- df_us %>%
+                    unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
+                    separate(trigram, c("word1", "word2", "word3"), sep = " ") %>%
+                    filter(!word1 %in% stop_words$word) %>%
+                    filter(!word2 %in% stop_words$word) %>%
+                    filter(!word3 %in% stop_words$word) %>%
+                    filter(
+                        !str_detect(word1, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word1, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word1, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word1, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    filter(
+                        !str_detect(word2, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word2, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word2, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word2, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    filter(
+                        !str_detect(word3, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word3, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word3, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word3, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    count(word1, word2, word3, sort = TRUE) %>%
+                    unite(trigram, word1, word2, word3, sep = " ") %>%
+                    head(15) %>%
+                    ggplot(mapping = aes(trigram, n, fill = n)) + geom_col() + coord_flip() + ggtitle("Trigrams US Data")
+
+
+grid.arrange(df_us_unigrams, df_us_bigrams, df_us_trigrams, ncol=3)
+```
+
+
+
+
+
+### TF-IDF for US - Blog, News, and Twitter.
+
+```{r fig.height=7, fig.width=14}
+df_us %>%
+    unnest_tokens(word, text) %>%
+    anti_join(stop_words, by = "word") %>%
+    filter(
+        !str_detect(word, pattern = "[[:digit:]]"), # removes any words with numeric digits
+        !str_detect(word, pattern = "[[:punct:]]"), # removes any remaining punctuations
+        !str_detect(word, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+        !str_detect(word, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+    ) %>%
+    count(source, word, sort=TRUE) %>%
+    ungroup() %>%
+    bind_tf_idf(word, source, n) %>%
+    arrange(desc(tf_idf)) %>%
+    mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+    group_by(source) %>% 
+    top_n(10) %>% 
+    ungroup() %>%
+    ggplot(mapping = aes(word, tf_idf, fill = source)) + geom_col(show.legend = FALSE) +   facet_wrap(~source, ncol = 3, scales = "free") + coord_flip() + ggtitle("TF-IDF for US Data")
+```
+
+
+## Plans for developing the app. 
+
+I will use a hybrid word prediction ngram model where n = 1, 2, and 3. I will create a probability matrix for all ngrams and make a prediction based on the highest ngram probability. If the word does not exist, then no prediction will be made. I will use a text input in the shiny app which will be reactive in nature in order to make the predictions.
+
+From a non-technical perspective, the app will run on a model which takes into account upto 3 previous words to give the best possible word prediction.
+
+
+End.

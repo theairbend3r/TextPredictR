@@ -1,0 +1,319 @@
+---
+title: "Predictive Text App"
+author: "Akshaj Verma"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+library(tm)
+library(SnowballC)
+library(gridExtra)
+library(wordcloud)
+library(tidyr)
+library(stringr)
+library(RColorBrewer)
+```
+
+## Read Data
+```{r}
+us_blog <- readLines(con = "../data/final/en_US/en_US.blogs.txt", encoding='UTF-8')
+us_twitter <- readLines(con = "../data/final/en_US/en_US.twitter.txt", encoding='UTF-8')
+us_news <- readLines(con = "../data/final/en_US/en_US.news.txt", encoding='UTF-8')
+```
+
+```{r}
+sample_size = 0.1
+
+sample_us_blog <- sample(us_blog, length(us_blog) * sample_size)
+sample_us_twitter <- sample(us_twitter, length(us_twitter) * sample_size)
+sample_us_news <- sample(us_news, length(us_news) * sample_size)
+```
+
+```{r}
+corpus_us_blog <- Corpus(VectorSource(sample_us_blog))
+corpus_us_twitter <- Corpus(VectorSource(sample_us_twitter))
+corpus_us_news <- Corpus(VectorSource(sample_us_news))
+```
+
+
+
+## Pre Process
+Convert to Dataframe for tidytext
+```{r}
+df_us_blog <- data.frame(text = sapply(corpus_us_blog, as.character), stringsAsFactors = FALSE)
+df_us_twitter <- data.frame(text = sapply(corpus_us_twitter, as.character), stringsAsFactors = FALSE)
+df_us_news <- data.frame(text = sapply(corpus_us_news, as.character), stringsAsFactors = FALSE)
+```
+
+
+Combine all three dataframes - US News, Blogs, and Twitter into a single dataframe. 
+```{r}
+df_us <- rbind(mutate(df_us_blog, source = "blog"),
+               mutate(df_us_twitter, source = "twitter"),
+               mutate(df_us_news, source = "news"))
+```
+
+## Util Functions.
+
+### Create Ngrams.
+```{r}
+createNgrams <- function(df, n) {
+    
+    if (n == 1) {
+        
+        df_unigrams <- df %>%
+                        unnest_tokens(word, text, token="ngrams", n=1) %>%
+                        # anti_join(stop_words, by = "word") %>%
+                        filter(
+                            !str_detect(word, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                            !str_detect(word, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                            !str_detect(word, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                            !str_detect(word, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                        ) %>%
+                        mutate(word = wordStem(word, language = "english")) %>%
+                        count(word, sort=TRUE)
+        gc();gc()
+        
+        return (df_unigrams)
+        
+    } else if (n == 2) {
+        df_bigrams <- df %>%
+                    unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+                    separate(bigram, c("word1", "word2"), sep = " ") %>%
+                    # filter(!word1 %in% stop_words$word) %>%
+                    # filter(!word2 %in% stop_words$word) %>%
+                    filter(
+                        !str_detect(word1, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word1, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word1, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word1, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    filter(
+                        !str_detect(word2, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word2, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word2, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word2, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    mutate(word1 = wordStem(word1, language = "english")) %>%
+                    mutate(word2 = wordStem(word2, language = "english")) %>%
+                    unite(bigram, word1, word2, sep = " ") %>%
+                    count(bigram, sort = TRUE) %>%
+                    separate(bigram, c("word1", "word2"), sep = " ")
+        
+        gc();gc()
+
+    
+        return (df_bigrams)
+        
+    } else if (n == 3) {
+        df_trigrams <- df %>%
+                    unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
+                    separate(trigram, c("word1", "word2", "word3"), sep = " ") %>%
+                    # filter(!word1 %in% stop_words$word) %>%
+                    # filter(!word2 %in% stop_words$word) %>%
+                    # filter(!word3 %in% stop_words$word) %>%
+                    filter(
+                        !str_detect(word1, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word1, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word1, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word1, pattern = "\\b(.)\\b")
+                    ) %>%
+                    filter(
+                        !str_detect(word2, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word2, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word2, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word2, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    filter(
+                        !str_detect(word3, pattern = "[[:digit:]]"), # removes any words with numeric digits
+                        !str_detect(word3, pattern = "[[:punct:]]"), # removes any remaining punctuations
+                        !str_detect(word3, pattern = "(.)\\1{2,}"),  # removes any words with 3 or more repeated letters
+                        !str_detect(word3, pattern = "\\b(.)\\b")    # removes any remaining single letter words
+                    ) %>%
+                    mutate(word1 = wordStem(word1, language = "english")) %>%
+                    mutate(word2 = wordStem(word2, language = "english")) %>%
+                    mutate(word3 = wordStem(word3, language = "english")) %>%
+                    unite(trigram, word1, word2, word3, sep = " ") %>%
+                    count(trigram, sort = TRUE) %>%
+                    separate(trigram, c("word1", "word2", "word3"), sep = " ")
+
+        
+        gc();gc()
+        
+        return (df_trigrams)
+    } else {
+        return ("Error AF.")
+    }
+    
+}
+```
+
+
+### Create Ngram probability.
+```{r}
+calcNgramProb <- function(df, n) {
+    
+    if(n == 2) {
+        word1_count_df <- df %>%
+                            group_by(word1) %>%
+                            summarise(word1_count = sum(n)) %>%
+                            filter(word1_count > 10) %>%
+                            arrange(-word1_count)
+
+            
+        bigram_probs <- left_join(df, word1_count_df, by = c("word1" = "word1")) %>% mutate(bigram_prob = n/word1_count) %>% arrange(-bigram_prob)
+
+        return (bigram_probs)
+
+    } else if (n == 3) {
+        word1_word2_count_df <- df %>%
+                                    group_by(word1, word2) %>%
+                                    summarise(word1_word2_count = sum(n)) %>%
+                                    filter(word1_word2_count > 10) %>%
+                                    arrange(-word1_word2_count) %>%
+                                    unite(word1_word2, word1, word2, sep = " ")
+        df <- df %>%
+            unite(word1_word2, word1, word2, sep = " ")
+                                    
+            
+        trigram_probs <- left_join(df, word1_word2_count_df, by = c("word1_word2" = "word1_word2")) %>% mutate(trigram_prob = n/word1_word2_count) %>% arrange(-trigram_prob)
+        
+    }
+
+} 
+```
+
+
+
+
+### Predict Next Word
+```{r}
+predictNextWord <- function(input_sentence, model, df) {
+
+    
+    if (model == "bigram") {
+        word_1 <- word(input_sentence, -1)
+        word_1 <- word_1[[1]]
+    
+        next_word_df <- df %>% 
+                            filter(word1 == word_1) %>%
+                            filter(bigram_prob == max(bigram_prob))
+        
+        next_word <- next_word_df$word2
+        
+    } else if (model == "trigram") {
+        word_2 <- word(input_sentence, -1)
+        word_2 <- word_2[[1]]
+        word_1 <- word(input_sentence, -2)
+        word_1 <- word_1[[1]]
+        
+        next_word_df <- df %>% 
+                            separate(word1_word2, c("word1", "word2"), sep = " ") %>%
+                            filter(word1 == word_1, word2 == word_2) %>%
+                            filter(trigram_prob == max(trigram_prob))
+        
+        next_word <- next_word_df$word3
+
+    } else {
+        return ("Incorrect Ngram config.")
+    }
+    
+    return(next_word)
+
+}
+```
+
+
+
+
+
+## Create N Grams
+```{r}
+# df_us_unigrams <- createNgrams(df_us, n = 1)
+df_us_bigrams <- createNgrams(df_us, n = 2)
+gc();gc()
+df_us_trigrams <- createNgrams(df_us, n = 3)
+gc();gc()
+```
+
+
+## Calculate N-Gram Probability
+
+### Bigram Probability
+```{r}
+df_us_bigrams_probs <- calcNgramProb(df_us_bigrams, n = 2)
+```
+
+### Trigram Probability
+```{r}
+df_us_trigrams_probs <- calcNgramProb(df_us_trigrams, n = 3)
+```
+
+## Predict Next Word
+```{r}
+predictNextWord("time and place", model = "trigram", df = df_us_trigrams_probs)
+```
+
+```{r}
+predictNextWord("how are you", bigram_prob = df_us_bigrams_probs, trigram_prob = df_us_trigrams_probs)
+```
+
+```{r}
+last <- function(x) { return( x[length(x)] ) }
+second_last <- function(x) { return( x[length(x)-1]) }
+
+predictNextWord <- function(input_sentence, bigram_prob_df, trigram_prob_df) {
+      if (lengths(strsplit(input_sentence, " ")) == 1) {
+        word_1 <- strsplit(input_sentence, " ")[[1]][1]
+        
+        word_1 <- str_to_lower(word_1)
+        
+        next_word_df <- bigram_prob_df %>% 
+            filter(word1 == word_1) %>%
+            filter(bigram_prob == max(bigram_prob)) %>%
+            head(1)
+        
+        
+        next_word <- next_word_df$word2
+    } else {
+        word_2 <- last(strsplit(input_sentence, " ")[[1]])
+        word_1 <- second_last(strsplit(input_sentence, " ")[[1]])
+        
+        word_1 <- str_to_lower(word_1)
+        word_2 <- str_to_lower(word_2)
+      
+        
+        next_word_bigram <- bigram_prob_df %>% 
+                        filter(word1 == word_2) %>%
+                        filter(bigram_prob == max(bigram_prob)) %>%
+                        head(1)
+
+        
+        next_word_trigram <- trigram_prob_df %>% 
+                        separate(word1_word2, c("word1", "word2"), sep = " ") %>%
+                        filter(word1 == word_1, word2 == word_2) %>%
+                        filter(trigram_prob == max(trigram_prob)) %>%
+                        head(1)
+        
+        if (next_word_bigram$bigram_prob > next_word_trigram$trigram_prob) {
+            next_word <- next_word_bigram$word2
+        } else {
+            next_word <- next_word_trigram$word3   
+        }
+
+        return(next_word)   
+    }
+
+  
+}
+
+```
+
+

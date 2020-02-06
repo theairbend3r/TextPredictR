@@ -1,0 +1,13 @@
+name: text_pred_app
+title: text_pred_app
+username:
+account: scarecrow21
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1393199
+bundleId: 2546888
+url: https://scarecrow21.shinyapps.io/text_pred_app/
+when: 1572338301.3855
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: trigram_probs.rds
